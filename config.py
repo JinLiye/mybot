@@ -7,6 +7,22 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+def load_dotenv(path: Path | None = None) -> None:
+    """Load simple KEY=VALUE lines into os.environ without overriding real env vars."""
+    env_path = path or Path(__file__).resolve().parent / ".env"
+    if not env_path.exists():
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
 def _env(name: str, default: str | None = None) -> str | None:
     value = os.environ.get(name)
     if value is None:
@@ -36,6 +52,7 @@ class BotConfig:
 
     @classmethod
     def from_env(cls) -> "BotConfig":
+        load_dotenv()
         provider_name = (_env("MYBOT_PROVIDER", "vllm") or "vllm").lower()
         workspace = Path(_env("MYBOT_WORKSPACE", "/home/asus/nanobot/mybot") or ".").expanduser()
         session_dir = Path(
