@@ -18,6 +18,17 @@ class ToolRegistry:
     def get_definitions(self) -> list[dict[str, Any]]:
         return [self._tools[name].to_schema() for name in sorted(self._tools)]
 
+    def get_summaries(self) -> list[dict[str, Any]]:
+        summaries: list[dict[str, Any]] = []
+        for name in sorted(self._tools):
+            tool = self._tools[name]
+            summaries.append({
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.parameters,
+            })
+        return summaries
+
     async def execute(self, name: str, arguments: dict[str, Any]) -> str:
         tool = self._tools.get(name)
         if tool is None:

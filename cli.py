@@ -130,10 +130,33 @@ async def _select_session(sessions: list[SessionSummary]) -> SessionSummary | No
     return await questionary.select("Resume session", choices=choices).ask_async()
 
 
+def _render_tools(loop: AgentLoop) -> None:
+    _render_status(
+        f"tools={'on' if loop.tools_enabled else 'off'} permission={loop.tool_permission_mode}"
+    )
+    for summary in loop.tools.get_summaries():
+        params = summary.get("parameters", {})
+        required = params.get("required", []) if isinstance(params, dict) else []
+        required_text = f" required={required}" if required else ""
+        print(_style(summary["name"], Style.BOLD, Style.MAGENTA))
+        print(f"  {summary['description']}{required_text}")
+
+
+def _render_permissions(loop: AgentLoop) -> None:
+    _render_status(f"tool permission mode: {loop.tool_permission_mode}")
+    print("  strict  Reject filesystem paths outside workspace")
+    print("  ask     Ask before filesystem paths outside workspace")
+    print("  open    Allow filesystem paths outside workspace")
+
+
 def _print_help() -> None:
     _render_status("Commands")
     print("  /help              Show this menu")
     print("  /resume            Select a saved session")
+    print("  /tools             Show available tools and current tool state")
+    print("  /tools on|off      Enable or disable tool calling")
+    print("  /permissions       Show tool permission mode")
+    print("  /permissions <mode>  Set strict, ask, or open")
     print("  /rename <name>     Rename current session")
     print("  /new               Start a new session")
     print("  /session           Show current session id")
@@ -174,6 +197,25 @@ async def _chat(provider_name: str | None = None) -> None:
             continue
         if command == "/workspace":
             _render_status(f"Current workspace: {config.workspace}")
+            continue
+        if command == "/tools":
+            _render_tools(loop)
+            continue
+        if command in {"/tools on", "/tools off"}:
+            loop.tools_enabled = command.endswith(" on")
+            _render_status(f"tools {'enabled' if loop.tools_enabled else 'disabled'}")
+            continue
+        if command == "/permissions":
+            _render_permissions(loop)
+            continue
+        if command.startswith("/permissions "):
+            mode = command.split(maxsplit=1)[1]
+            try:
+                loop.set_tool_permission_mode(mode)
+            except ValueError as exc:
+                _render_error(str(exc))
+            else:
+                _render_status(f"tool permission mode set to: {loop.tool_permission_mode}")
             continue
         if command == "/new":
             state.chat_id = str(uuid4())

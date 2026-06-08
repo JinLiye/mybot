@@ -47,11 +47,12 @@ class AgentRunner:
         max_iterations: int,
         max_tokens: int,
         temperature: float,
+        tools_enabled: bool = True,
     ) -> AgentRunResult:
         conversation = list(messages)
         tools_used: list[str] = []
         tool_events: list[ToolEvent] = []
-        definitions = tools.get_definitions()
+        definitions = tools.get_definitions() if tools_enabled else []
 
         for _ in range(max_iterations):
             response = await self.provider.chat(
@@ -60,7 +61,7 @@ class AgentRunner:
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
-            if response.should_execute_tools:
+            if tools_enabled and response.should_execute_tools:
                 assistant_message: dict[str, Any] = {
                     "role": "assistant",
                     "content": response.content or "",

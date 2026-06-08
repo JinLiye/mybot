@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from mybot.bus import MessageBus
 from mybot.config import BotConfig
 from mybot.context import ContextBuilder
@@ -9,12 +11,14 @@ from mybot.events import InboundMessage, OutboundMessage
 from mybot.providers.openai_compat import OpenAICompatProvider
 from mybot.runner import AgentRunner
 from mybot.session import SessionStore
-from mybot.tools.filesystem import register_filesystem_tools
+from mybot.tools.filesystem import confirm_outside_workspace, register_filesystem_tools
 from mybot.tools.registry import ToolRegistry
 
 
 class AgentLoop:
     """Small orchestrator inspired by nanobot's layering."""
+
+    VALID_TOOL_PERMISSION_MODES = {"strict", "ask", "open"}
 
     def __init__(self, config: BotConfig) -> None:
         self.config = config
@@ -26,9 +30,25 @@ class AgentLoop:
             api_base=config.provider.api_base,
             model=config.provider.model,
         )
+        self.tools_enabled = True
+        self.tool_permission_mode = "ask"
         self.tools = ToolRegistry()
-        register_filesystem_tools(self.tools, config.workspace)
+        register_filesystem_tools(self.tools, config.workspace, confirm_outside=self._confirm_outside_workspace)
         self.runner = AgentRunner(self.provider)
+
+    def set_tool_permission_mode(self, mode: str) -> None:
+        normalized = mode.strip().lower()
+        if normalized not in self.VALID_TOOL_PERMISSION_MODES:
+            allowed = ", ".join(sorted(self.VALID_TOOL_PERMISSION_MODES))
+            raise ValueError(f"Unknown permission mode {mode!r}; expected one of: {allowed}")
+        self.tool_permission_mode = normalized
+
+    def _confirm_outside_workspace(self, candidate: Path, workspace: Path, original_path: str) -> bool:
+        if self.tool_permission_mode == "open":
+            return True
+        if self.tool_permission_mode == "strict":
+            return False
+        return confirm_outside_workspace(candidate, workspace, original_path)
 
     async def process(self, inbound: InboundMessage) -> OutboundMessage:
         session = self.sessions.get_or_create(inbound.session_key)
@@ -40,6 +60,7 @@ class AgentLoop:
             max_iterations=self.config.max_iterations,
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
+            tools_enabled=self.tools_enabled,
         )
         tool_events = [
             {
