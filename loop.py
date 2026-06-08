@@ -9,6 +9,7 @@ from mybot.events import InboundMessage, OutboundMessage
 from mybot.providers.openai_compat import OpenAICompatProvider
 from mybot.runner import AgentRunner
 from mybot.session import SessionStore
+from mybot.tools.filesystem import register_filesystem_tools
 from mybot.tools.registry import ToolRegistry
 
 
@@ -26,6 +27,7 @@ class AgentLoop:
             model=config.provider.model,
         )
         self.tools = ToolRegistry()
+        register_filesystem_tools(self.tools, config.workspace)
         self.runner = AgentRunner(self.provider)
 
     async def process(self, inbound: InboundMessage) -> OutboundMessage:
