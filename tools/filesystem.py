@@ -2,21 +2,49 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from mybot.tools.base import Tool
 
+ConfirmOutsideWorkspace = Callable[[Path, Path, str], bool]
+
+
+def confirm_outside_workspace(candidate: Path, workspace: Path, original_path: str) -> bool:
+    print("\nTool requested a path outside the current workspace.")
+    print(f"workspace: {workspace}")
+    print(f"requested: {candidate}")
+    answer = input(f"Allow this tool access for {original_path!r}? [y/N] ").strip().lower()
+    return answer in {"y", "yes"}
+
+
 
 class WorkspaceTool:
-    def __init__(self, workspace: Path) -> None:
+    def __init__(
+        self,
+        workspace: Path,
+        confirm_outside: ConfirmOutsideWorkspace | None = None,
+    ) -> None:
         self.workspace = workspace.expanduser().resolve()
+        self.confirm_outside = confirm_outside
 
     def _resolve_path(self, path: str = ".") -> Path:
-        candidate = (self.workspace / path).expanduser().resolve()
-        if candidate != self.workspace and self.workspace not in candidate.parents:
-            raise ValueError(f"Path is outside workspace: {path}")
-        return candidate
+        raw = Path(path).expanduser()
+        candidate = raw.resolve() if raw.is_absolute() else (self.workspace / raw).resolve()
+        if self._inside_workspace(candidate):
+            return candidate
+        if self.confirm_outside and self.confirm_outside(candidate, self.workspace, path):
+            return candidate
+        raise PermissionError(f"Path is outside workspace: {path}")
+
+    def _inside_workspace(self, path: Path) -> bool:
+        return path == self.workspace or self.workspace in path.parents
+
+    def _display_path(self, path: Path) -> str:
+        if self._inside_workspace(path):
+            return str(path.relative_to(self.workspace))
+        return str(path)
 
 
 class ListDirTool(WorkspaceTool, Tool):
@@ -26,7 +54,7 @@ class ListDirTool(WorkspaceTool, Tool):
 
     @property
     def description(self) -> str:
-        return "List files and directories under the configured workspace."
+        return "List files and directories. Paths inside workspace run directly; outside paths require user confirmation."
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -35,7 +63,7 @@ class ListDirTool(WorkspaceTool, Tool):
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Relative path inside the workspace. Defaults to '.'.",
+                    "description": "Relative path inside the workspace, or an absolute path that requires user confirmation.",
                 }
             },
         }
@@ -52,7 +80,7 @@ class ListDirTool(WorkspaceTool, Tool):
                 "name": item.name,
                 "type": "directory" if item.is_dir() else "file",
             })
-        return {"path": str(target.relative_to(self.workspace)), "entries": entries}
+        return {"path": self._display_path(target), "entries": entries}
 
 
 class ReadFileTool(WorkspaceTool, Tool):
@@ -62,7 +90,7 @@ class ReadFileTool(WorkspaceTool, Tool):
 
     @property
     def description(self) -> str:
-        return "Read a UTF-8 text file under the configured workspace."
+        return "Read a UTF-8 text file. Workspace files run directly; outside files require user confirmation."
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -71,7 +99,7 @@ class ReadFileTool(WorkspaceTool, Tool):
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Relative file path inside the workspace.",
+                    "description": "Relative file path inside the workspace, or an absolute path that requires user confirmation.",
                 },
                 "max_chars": {
                     "type": "integer",
@@ -93,7 +121,7 @@ class ReadFileTool(WorkspaceTool, Tool):
         if truncated:
             content = content[:max_chars]
         return {
-            "path": str(target.relative_to(self.workspace)),
+            "path": self._display_path(target),
             "content": content,
             "truncated": truncated,
         }
@@ -106,7 +134,7 @@ class SearchTextTool(WorkspaceTool, Tool):
 
     @property
     def description(self) -> str:
-        return "Search UTF-8 text files under the configured workspace for a query string."
+        return "Search UTF-8 text files. Workspace paths run directly; outside paths require user confirmation."
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -119,7 +147,7 @@ class SearchTextTool(WorkspaceTool, Tool):
                 },
                 "path": {
                     "type": "string",
-                    "description": "Relative directory path inside the workspace. Defaults to '.'.",
+                    "description": "Relative directory path inside the workspace, or an absolute path that requires user confirmation.",
                 },
                 "max_results": {
                     "type": "integer",
@@ -146,7 +174,7 @@ class SearchTextTool(WorkspaceTool, Tool):
 
         matches: list[dict[str, Any]] = []
         for file_path in candidates:
-            relative = str(file_path.relative_to(self.workspace))
+            relative = self._display_path(file_path)
             try:
                 lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
             except OSError:
@@ -163,7 +191,11 @@ class SearchTextTool(WorkspaceTool, Tool):
         return {"query": query, "matches": matches, "truncated": False}
 
 
-def register_filesystem_tools(registry: Any, workspace: Path) -> None:
-    registry.register(ListDirTool(workspace))
-    registry.register(ReadFileTool(workspace))
-    registry.register(SearchTextTool(workspace))
+def register_filesystem_tools(
+    registry: Any,
+    workspace: Path,
+    confirm_outside: ConfirmOutsideWorkspace | None = confirm_outside_workspace,
+) -> None:
+    registry.register(ListDirTool(workspace, confirm_outside=confirm_outside))
+    registry.register(ReadFileTool(workspace, confirm_outside=confirm_outside))
+    registry.register(SearchTextTool(workspace, confirm_outside=confirm_outside))

@@ -7,13 +7,30 @@ from tools.registry import ToolRegistry
 
 
 @pytest.mark.asyncio
-async def test_filesystem_tools_are_workspace_scoped(tmp_path) -> None:
+async def test_filesystem_tools_reject_outside_workspace_by_default(tmp_path) -> None:
     outside = tmp_path.parent / "outside.txt"
     outside.write_text("secret", encoding="utf-8")
-    tool = ReadFileTool(tmp_path)
+    tool = ReadFileTool(tmp_path, confirm_outside=None)
 
-    with pytest.raises(ValueError, match="outside workspace"):
+    with pytest.raises(PermissionError, match="outside workspace"):
         await tool.execute("../outside.txt")
+
+
+@pytest.mark.asyncio
+async def test_filesystem_tools_allow_outside_workspace_after_confirmation(tmp_path) -> None:
+    outside = tmp_path.parent / "outside.txt"
+    outside.write_text("secret", encoding="utf-8")
+    calls = []
+
+    def confirm(candidate, workspace, original_path):
+        calls.append((candidate, workspace, original_path))
+        return True
+
+    result = await ReadFileTool(tmp_path, confirm_outside=confirm).execute("../outside.txt")
+
+    assert result["path"] == str(outside.resolve())
+    assert result["content"] == "secret"
+    assert calls and calls[0][2] == "../outside.txt"
 
 
 @pytest.mark.asyncio
@@ -32,12 +49,8 @@ async def test_list_dir_and_read_file(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_search_text_returns_matching_lines(tmp_path) -> None:
-    (tmp_path / "a.txt").write_text("alpha
-needle one
-", encoding="utf-8")
-    (tmp_path / "b.txt").write_text("needle two
-beta
-", encoding="utf-8")
+    (tmp_path / "a.txt").write_text("alpha\nneedle one\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("needle two\nbeta\n", encoding="utf-8")
 
     result = await SearchTextTool(tmp_path).execute("needle")
 

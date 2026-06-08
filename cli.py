@@ -137,6 +137,7 @@ def _print_help() -> None:
     print("  /rename <name>     Rename current session")
     print("  /new               Start a new session")
     print("  /session           Show current session id")
+    print("  /workspace         Show current tool workspace")
     print("  /exit              Quit")
 
 
@@ -157,6 +158,7 @@ async def _chat(provider_name: str | None = None) -> None:
     state = CliState(chat_id=str(uuid4()))
 
     _render_status(f"mybot provider={config.provider.name} model={config.provider.model}")
+    _render_status(f"workspace={config.workspace}")
     _render_status("Type /help for commands. Type /exit to stop.")
 
     while True:
@@ -169,6 +171,9 @@ async def _chat(provider_name: str | None = None) -> None:
             continue
         if command == "/session":
             _render_status(f"Current session id: {state.chat_id}")
+            continue
+        if command == "/workspace":
+            _render_status(f"Current workspace: {config.workspace}")
             continue
         if command == "/new":
             state.chat_id = str(uuid4())

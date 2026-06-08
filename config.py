@@ -54,7 +54,7 @@ class BotConfig:
     def from_env(cls) -> "BotConfig":
         load_dotenv()
         provider_name = (_env("MYBOT_PROVIDER", "vllm") or "vllm").lower()
-        workspace = Path(_env("MYBOT_WORKSPACE", "/home/asus/nanobot/mybot") or ".").expanduser()
+        workspace = Path(_env("MYBOT_WORKSPACE", str(Path.cwd())) or ".").expanduser().resolve()
         session_dir = Path(
             _env("MYBOT_SESSION_DIR", str(workspace / ".data" / "sessions")) or workspace / ".data" / "sessions"
         ).expanduser()
