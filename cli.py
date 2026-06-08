@@ -13,6 +13,38 @@ from mybot.loop import AgentLoop
 from mybot.session import SessionSummary
 
 
+class Style:
+    RESET = "\033[0m"
+    DIM = "\033[2m"
+    BOLD = "\033[1m"
+    CYAN = "\033[36m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    MAGENTA = "\033[35m"
+    RED = "\033[31m"
+
+
+def _style(text: str, *codes: str) -> str:
+    return "".join(codes) + text + Style.RESET
+
+
+def _render_block(label: str, content: str, color: str) -> None:
+    print(_style(f"\n[{label}]", Style.BOLD, color))
+    print(content)
+
+
+def _render_status(message: str) -> None:
+    print(_style(f":: {message}", Style.DIM, Style.CYAN))
+
+
+def _render_error(message: str) -> None:
+    print(_style(f"!! {message}", Style.BOLD, Style.RED))
+
+
+def _render_tool(message: str) -> None:
+    print(_style(f"tool> {message}", Style.MAGENTA))
+
+
 @dataclass(slots=True)
 class CliState:
     chat_id: str
@@ -38,26 +70,28 @@ def _format_session(summary: SessionSummary) -> str:
 
 def _render_history(messages: list[dict], *, limit: int) -> None:
     if not messages:
-        print("No previous messages in this session.")
+        _render_status("No previous messages in this session.")
         return
     visible = messages[-limit:] if limit > 0 else messages
     hidden = len(messages) - len(visible)
-    print("--- session history ---")
+    _render_status("session history")
     if hidden > 0:
-        print(f"... {hidden} earlier message(s) hidden")
+        _render_status(f"... {hidden} earlier message(s) hidden")
     for message in visible:
         role = message.get("role")
         content = str(message.get("content") or "").strip()
         if not content or role not in {"user", "assistant"}:
             continue
-        label = "you" if role == "user" else "bot"
-        print(f"{label}> {content}")
-    print("--- continue ---")
+        if role == "user":
+            _render_block("you", content, Style.GREEN)
+        else:
+            _render_block("bot", content, Style.CYAN)
+    _render_status("continue")
 
 
 async def _select_session(sessions: list[SessionSummary]) -> SessionSummary | None:
     if not sessions:
-        print("No saved sessions.")
+        _render_status("No saved sessions.")
         return None
     try:
         import questionary
@@ -80,7 +114,7 @@ async def _select_session(sessions: list[SessionSummary]) -> SessionSummary | No
 
 
 def _print_help() -> None:
-    print("Commands:")
+    _render_status("Commands")
     print("  /help              Show this menu")
     print("  /resume            Select a saved session")
     print("  /rename <name>     Rename current session")
@@ -105,8 +139,8 @@ async def _chat(provider_name: str | None = None) -> None:
     loop = AgentLoop(config)
     state = CliState(chat_id=str(uuid4()))
 
-    print(f"mybot provider={config.provider.name} model={config.provider.model}")
-    print("Type /help for commands. Type /exit to stop.")
+    _render_status(f"mybot provider={config.provider.name} model={config.provider.model}")
+    _render_status("Type /help for commands. Type /exit to stop.")
 
     while True:
         user_text = input("you> ").strip()
@@ -117,18 +151,18 @@ async def _chat(provider_name: str | None = None) -> None:
             _print_help()
             continue
         if command == "/session":
-            print(f"Current session id: {state.chat_id}")
+            _render_status(f"Current session id: {state.chat_id}")
             continue
         if command == "/new":
             state.chat_id = str(uuid4())
-            print(f"Started new session: {state.chat_id}")
+            _render_status(f"Started new session: {state.chat_id}")
             continue
         if command == "/resume":
             selected = await _select_session(loop.sessions.list_sessions())
             if selected is None:
                 continue
             state.chat_id = _chat_id_from_key(selected.key)
-            print(f"Resumed: {_format_session(selected)}")
+            _render_status(f"Resumed: {_format_session(selected)}")
             session = loop.sessions.get_or_create(selected.key)
             _render_history(session.messages, limit=config.max_history_messages)
             continue
@@ -137,15 +171,15 @@ async def _chat(provider_name: str | None = None) -> None:
             if not title:
                 title = input("name> ").strip()
             if not title:
-                print("Rename skipped.")
+                _render_status("Rename skipped.")
                 continue
             session = loop.sessions.get_or_create(f"cli:{state.chat_id}")
             session.rename(title)
             loop.sessions.save(session)
-            print(f"Renamed current session to: {title}")
+            _render_status(f"Renamed current session to: {title}")
             continue
         if user_text.startswith("/"):
-            print("Unknown command. Type /help for commands.")
+            _render_error("Unknown command. Type /help for commands.")
             continue
         inbound = InboundMessage(
             channel="cli",
@@ -154,7 +188,7 @@ async def _chat(provider_name: str | None = None) -> None:
             content=user_text,
         )
         outbound = await loop.process(inbound)
-        print(f"bot> {outbound.content}")
+        _render_block("bot", outbound.content, Style.CYAN)
 
 
 def main() -> None:
