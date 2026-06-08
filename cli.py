@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -57,6 +58,80 @@ def _render_tool_events(events: list[dict]) -> None:
             _render_error(f"tool error: {error}")
         elif preview:
             print(_style(f"tool< {preview}", Style.DIM, Style.MAGENTA))
+
+
+def _find_latest_trace(messages: list[dict]) -> dict | None:
+    for message in reversed(messages):
+        trace = message.get("trace")
+        if isinstance(trace, dict):
+            return trace
+    return None
+
+
+def _render_trace(trace: dict, *, full: bool = False) -> None:
+    run_id = trace.get("run_id", "unknown")
+    status = trace.get("status", "unknown")
+    duration = trace.get("duration_ms")
+    duration_text = f"{duration}ms" if isinstance(duration, int) else "unknown"
+    _render_status(f"trace run={run_id} status={status} duration={duration_text}")
+    steps = trace.get("steps", [])
+    if not isinstance(steps, list) or not steps:
+        _render_status("No trace steps.")
+        return
+    for index, step in enumerate(steps, start=1):
+        if not isinstance(step, dict):
+            continue
+        step_type = step.get("type", "unknown")
+        iteration = step.get("iteration")
+        prefix = f"#{index} {step_type}"
+        if iteration is not None:
+            prefix += f" iter={iteration}"
+        if step_type == "llm_request":
+            print(
+                _style(
+                    f"{prefix} messages={step.get('message_count')} tools={step.get('tool_count')} enabled={step.get('tools_enabled')}",
+                    Style.DIM,
+                    Style.YELLOW,
+                )
+            )
+        elif step_type == "llm_response":
+            calls = step.get("tool_calls") or []
+            names = ", ".join(str(call.get("name")) for call in calls if isinstance(call, dict))
+            usage = step.get("usage") or {}
+            summary = f"{prefix} finish={step.get('finish_reason')} duration={step.get('duration_ms')}ms"
+            if usage:
+                summary += f" usage={usage}"
+            if names:
+                summary += f" tool_calls=[{names}]"
+            print(_style(summary, Style.YELLOW))
+            preview = step.get("content_preview")
+            if preview:
+                print(_style(f"  model> {preview}", Style.DIM, Style.YELLOW))
+        elif step_type == "tool_call":
+            _render_tool(f"{prefix} {step.get('name')} {step.get('arguments', {})}")
+        elif step_type == "tool_result":
+            error = step.get("error")
+            _render_tool(f"{prefix} {step.get('name')} ({step.get('duration_ms')}ms)")
+            if error:
+                _render_error(f"tool error: {error}")
+            else:
+                key = "result" if full else "result_preview"
+                result = str(step.get(key) or "")
+                if result:
+                    print(_style(f"  observe> {result}", Style.DIM, Style.MAGENTA))
+        elif step_type == "final":
+            print(_style(f"{prefix}", Style.BOLD, Style.CYAN))
+            preview = step.get("content_preview")
+            if preview:
+                print(_style(f"  final> {preview}", Style.CYAN))
+        elif step_type == "error":
+            _render_error(f"{prefix} {step.get('message')}")
+        else:
+            print(_style(f"{prefix} {step}", Style.DIM))
+
+
+def _render_trace_json(trace: dict) -> None:
+    print(json.dumps(trace, ensure_ascii=False, indent=2))
 
 
 @dataclass(slots=True)
@@ -157,6 +232,9 @@ def _print_help() -> None:
     print("  /tools on|off      Enable or disable tool calling")
     print("  /permissions       Show tool permission mode")
     print("  /permissions <mode>  Set strict, ask, or open")
+    print("  /trace             Show latest Agent Trace for current session")
+    print("  /trace full        Show latest trace with full tool results")
+    print("  /trace json        Print latest trace as JSON")
     print("  /rename <name>     Rename current session")
     print("  /new               Start a new session")
     print("  /session           Show current session id")
@@ -216,6 +294,17 @@ async def _chat(provider_name: str | None = None) -> None:
                 _render_error(str(exc))
             else:
                 _render_status(f"tool permission mode set to: {loop.tool_permission_mode}")
+            continue
+        if command == "/trace" or command in {"/trace full", "/trace json"}:
+            session = loop.sessions.get_or_create(f"cli:{state.chat_id}")
+            trace = _find_latest_trace(session.messages)
+            if trace is None:
+                _render_status("No trace recorded for current session yet.")
+                continue
+            if command == "/trace json":
+                _render_trace_json(trace)
+            else:
+                _render_trace(trace, full=command == "/trace full")
             continue
         if command == "/new":
             state.chat_id = str(uuid4())

@@ -71,3 +71,59 @@ async def test_runner_executes_tool_calls_then_returns_final_content() -> None:
     assert any(message.get("role") == "tool" for message in result.messages)
     tool_message = next(message for message in result.messages if message.get("role") == "tool")
     assert json.loads(tool_message["content"]) == {"echo": "hello"}
+
+
+
+@pytest.mark.asyncio
+async def test_runner_records_agent_trace() -> None:
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="",
+                tool_calls=[ToolCallRequest(id="1", name="echo", arguments={"text": "hello"})],
+                finish_reason="tool_calls",
+                usage={"prompt_tokens": 10, "completion_tokens": 2},
+            ),
+            LLMResponse(
+                content="done",
+                finish_reason="stop",
+                usage={"prompt_tokens": 12, "completion_tokens": 1},
+            ),
+        ]
+    )
+    tools = ToolRegistry()
+    tools.register(EchoTool())
+    runner = AgentRunner(provider)
+
+    result = await runner.run(
+        [{"role": "system", "content": "test"}, {"role": "user", "content": "hi"}],
+        tools=tools,
+        max_iterations=3,
+        max_tokens=256,
+        temperature=0.1,
+    )
+
+    trace = result.trace
+    assert trace["run_id"]
+    assert trace["status"] == "completed"
+    assert isinstance(trace["duration_ms"], int)
+    step_types = [step["type"] for step in trace["steps"]]
+    assert step_types == [
+        "llm_request",
+        "llm_response",
+        "tool_call",
+        "tool_result",
+        "llm_request",
+        "llm_response",
+        "final",
+    ]
+    first_response = trace["steps"][1]
+    assert first_response["finish_reason"] == "tool_calls"
+    assert first_response["usage"]["total_tokens"] == 12
+    assert first_response["tool_calls"] == [
+        {"id": "1", "name": "echo", "arguments": {"text": "hello"}}
+    ]
+    tool_result = trace["steps"][3]
+    assert tool_result["name"] == "echo"
+    assert "hello" in tool_result["result_preview"]
+    assert json.loads(tool_result["result"]) == {"echo": "hello"}

@@ -92,13 +92,18 @@ class AgentLoop:
             result.final_content,
             tools_used=result.tools_used,
             tool_events=tool_events,
+            trace=result.trace,
         )
         self.sessions.save(session)
         return OutboundMessage(
             channel=inbound.channel,
             chat_id=inbound.chat_id,
             content=result.final_content,
-            metadata={"tools_used": result.tools_used, "tool_events": tool_events},
+            metadata={
+                "tools_used": result.tools_used,
+                "tool_events": tool_events,
+                "trace": result.trace,
+            },
         )
 
     async def serve_forever(self) -> None:
