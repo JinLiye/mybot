@@ -41,14 +41,29 @@ class AgentLoop:
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
         )
+        tool_events = [
+            {
+                "name": event.name,
+                "arguments": event.arguments,
+                "result_preview": event.result_preview,
+                "duration_ms": event.duration_ms,
+                "error": event.error,
+            }
+            for event in result.tool_events
+        ]
         session.add_message("user", inbound.content)
-        session.add_message("assistant", result.final_content)
+        session.add_message(
+            "assistant",
+            result.final_content,
+            tools_used=result.tools_used,
+            tool_events=tool_events,
+        )
         self.sessions.save(session)
         return OutboundMessage(
             channel=inbound.channel,
             chat_id=inbound.chat_id,
             content=result.final_content,
-            metadata={"tools_used": result.tools_used},
+            metadata={"tools_used": result.tools_used, "tool_events": tool_events},
         )
 
     async def serve_forever(self) -> None:

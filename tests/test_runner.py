@@ -63,6 +63,11 @@ async def test_runner_executes_tool_calls_then_returns_final_content() -> None:
 
     assert result.final_content == "done"
     assert result.tools_used == ["echo"]
+    assert len(result.tool_events) == 1
+    assert result.tool_events[0].name == "echo"
+    assert result.tool_events[0].arguments == {"text": "hello"}
+    assert result.tool_events[0].error is None
+    assert "hello" in result.tool_events[0].result_preview
     assert any(message.get("role") == "tool" for message in result.messages)
     tool_message = next(message for message in result.messages if message.get("role") == "tool")
     assert json.loads(tool_message["content"]) == {"echo": "hello"}

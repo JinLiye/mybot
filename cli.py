@@ -45,6 +45,20 @@ def _render_tool(message: str) -> None:
     print(_style(f"tool> {message}", Style.MAGENTA))
 
 
+def _render_tool_events(events: list[dict]) -> None:
+    for event in events:
+        name = event.get("name", "unknown")
+        duration = event.get("duration_ms", 0)
+        arguments = event.get("arguments", {})
+        preview = event.get("result_preview", "")
+        error = event.get("error")
+        _render_tool(f"{name} {arguments} ({duration}ms)")
+        if error:
+            _render_error(f"tool error: {error}")
+        elif preview:
+            print(_style(f"tool< {preview}", Style.DIM, Style.MAGENTA))
+
+
 @dataclass(slots=True)
 class CliState:
     chat_id: str
@@ -85,6 +99,9 @@ def _render_history(messages: list[dict], *, limit: int) -> None:
         if role == "user":
             _render_block("you", content, Style.GREEN)
         else:
+            events = message.get("tool_events")
+            if isinstance(events, list) and events:
+                _render_tool_events(events)
             _render_block("bot", content, Style.CYAN)
     _render_status("continue")
 
@@ -188,6 +205,9 @@ async def _chat(provider_name: str | None = None) -> None:
             content=user_text,
         )
         outbound = await loop.process(inbound)
+        events = outbound.metadata.get("tool_events")
+        if isinstance(events, list) and events:
+            _render_tool_events(events)
         _render_block("bot", outbound.content, Style.CYAN)
 
 
