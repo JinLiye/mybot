@@ -36,7 +36,7 @@ def _format_session(summary: SessionSummary) -> str:
     return f"{title} | id={_chat_id_from_key(summary.key)} | first={first}"
 
 
-def _select_session(sessions: list[SessionSummary]) -> SessionSummary | None:
+async def _select_session(sessions: list[SessionSummary]) -> SessionSummary | None:
     if not sessions:
         print("No saved sessions.")
         return None
@@ -57,7 +57,7 @@ def _select_session(sessions: list[SessionSummary]) -> SessionSummary | None:
         questionary.Choice(title=_format_session(summary), value=summary)
         for summary in sessions
     ]
-    return questionary.select("Resume session", choices=choices).ask()
+    return await questionary.select("Resume session", choices=choices).ask_async()
 
 
 def _print_help() -> None:
@@ -105,7 +105,7 @@ async def _chat(provider_name: str | None = None) -> None:
             print(f"Started new session: {state.chat_id}")
             continue
         if command == "/resume":
-            selected = _select_session(loop.sessions.list_sessions())
+            selected = await _select_session(loop.sessions.list_sessions())
             if selected is None:
                 continue
             state.chat_id = _chat_id_from_key(selected.key)
