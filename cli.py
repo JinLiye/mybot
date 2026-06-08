@@ -36,6 +36,25 @@ def _format_session(summary: SessionSummary) -> str:
     return f"{title} | id={_chat_id_from_key(summary.key)} | first={first}"
 
 
+def _render_history(messages: list[dict], *, limit: int) -> None:
+    if not messages:
+        print("No previous messages in this session.")
+        return
+    visible = messages[-limit:] if limit > 0 else messages
+    hidden = len(messages) - len(visible)
+    print("--- session history ---")
+    if hidden > 0:
+        print(f"... {hidden} earlier message(s) hidden")
+    for message in visible:
+        role = message.get("role")
+        content = str(message.get("content") or "").strip()
+        if not content or role not in {"user", "assistant"}:
+            continue
+        label = "you" if role == "user" else "bot"
+        print(f"{label}> {content}")
+    print("--- continue ---")
+
+
 async def _select_session(sessions: list[SessionSummary]) -> SessionSummary | None:
     if not sessions:
         print("No saved sessions.")
@@ -110,6 +129,8 @@ async def _chat(provider_name: str | None = None) -> None:
                 continue
             state.chat_id = _chat_id_from_key(selected.key)
             print(f"Resumed: {_format_session(selected)}")
+            session = loop.sessions.get_or_create(selected.key)
+            _render_history(session.messages, limit=config.max_history_messages)
             continue
         if command == "/rename" or command.startswith("/rename "):
             title = user_text[len("/rename"):].strip()
