@@ -144,9 +144,9 @@ def _render_tools(loop: AgentLoop) -> None:
 
 def _render_permissions(loop: AgentLoop) -> None:
     _render_status(f"tool permission mode: {loop.tool_permission_mode}")
-    print("  strict  Reject filesystem paths outside workspace")
-    print("  ask     Ask before filesystem paths outside workspace")
-    print("  open    Allow filesystem paths outside workspace")
+    print("  strict  Reject shell execution and filesystem paths outside workspace")
+    print("  ask     Ask before every shell command and outside filesystem paths")
+    print("  open    Allow shell and outside filesystem paths without prompting")
 
 
 def _print_help() -> None:

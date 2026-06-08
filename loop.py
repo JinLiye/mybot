@@ -13,6 +13,7 @@ from mybot.runner import AgentRunner
 from mybot.session import SessionStore
 from mybot.tools.filesystem import confirm_outside_workspace, register_filesystem_tools
 from mybot.tools.registry import ToolRegistry
+from mybot.tools.shell import confirm_shell_exec, register_shell_tools
 
 
 class AgentLoop:
@@ -34,6 +35,12 @@ class AgentLoop:
         self.tool_permission_mode = "ask"
         self.tools = ToolRegistry()
         register_filesystem_tools(self.tools, config.workspace, confirm_outside=self._confirm_outside_workspace)
+        register_shell_tools(
+            self.tools,
+            config.workspace,
+            confirm_exec=self._confirm_shell_exec,
+            confirm_outside=self._confirm_outside_workspace,
+        )
         self.runner = AgentRunner(self.provider)
 
     def set_tool_permission_mode(self, mode: str) -> None:
@@ -49,6 +56,13 @@ class AgentLoop:
         if self.tool_permission_mode == "strict":
             return False
         return confirm_outside_workspace(candidate, workspace, original_path)
+
+    def _confirm_shell_exec(self, command: str, cwd: Path) -> bool:
+        if self.tool_permission_mode == "open":
+            return True
+        if self.tool_permission_mode == "strict":
+            return False
+        return confirm_shell_exec(command, cwd)
 
     async def process(self, inbound: InboundMessage) -> OutboundMessage:
         session = self.sessions.get_or_create(inbound.session_key)
