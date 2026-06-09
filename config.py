@@ -49,6 +49,9 @@ class BotConfig:
     max_iterations: int = 4
     max_tokens: int = 2048
     temperature: float = 0.2
+    memory_summary_trigger_messages: int = 24
+    memory_summary_keep_messages: int = 12
+    memory_summary_max_tokens: int = 512
 
     @classmethod
     def from_env(cls) -> "BotConfig":
@@ -88,6 +91,9 @@ class BotConfig:
         max_iterations = int(_env("MYBOT_MAX_ITERATIONS", "4") or "4")
         max_tokens = int(_env("MYBOT_MAX_TOKENS", "2048") or "2048")
         temperature = float(_env("MYBOT_TEMPERATURE", "0.2") or "0.2")
+        memory_summary_trigger_messages = int(_env("MYBOT_MEMORY_SUMMARY_TRIGGER_MESSAGES", "24") or "24")
+        memory_summary_keep_messages = int(_env("MYBOT_MEMORY_SUMMARY_KEEP_MESSAGES", "12") or "12")
+        memory_summary_max_tokens = int(_env("MYBOT_MEMORY_SUMMARY_MAX_TOKENS", "512") or "512")
 
         return cls(
             provider=provider,
@@ -98,4 +104,7 @@ class BotConfig:
             max_iterations=max_iterations,
             max_tokens=max_tokens,
             temperature=temperature,
+            memory_summary_trigger_messages=memory_summary_trigger_messages,
+            memory_summary_keep_messages=memory_summary_keep_messages,
+            memory_summary_max_tokens=memory_summary_max_tokens,
         )

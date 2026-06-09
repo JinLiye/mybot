@@ -25,6 +25,9 @@ class Session:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     title: str = ""
+    memory_summary: str = ""
+    memory_summary_message_count: int = 0
+    memory_updated_at: str = ""
 
     def add_message(self, role: str, content: str, **extra: Any) -> None:
         self.messages.append(
@@ -41,6 +44,27 @@ class Session:
         if max_messages <= 0:
             return list(self.messages)
         return list(self.messages[-max_messages:])
+
+    def get_context_history(self, max_messages: int) -> list[dict[str, Any]]:
+        if self.memory_summary:
+            history = self.messages[self.memory_summary_message_count :]
+        else:
+            history = self.messages
+        if max_messages <= 0:
+            return list(history)
+        return list(history[-max_messages:])
+
+    def set_memory_summary(self, summary: str, message_count: int) -> None:
+        self.memory_summary = summary.strip()
+        self.memory_summary_message_count = max(0, min(message_count, len(self.messages)))
+        self.memory_updated_at = datetime.now().isoformat()
+        self.updated_at = datetime.now().isoformat()
+
+    def clear_memory_summary(self) -> None:
+        self.memory_summary = ""
+        self.memory_summary_message_count = 0
+        self.memory_updated_at = ""
+        self.updated_at = datetime.now().isoformat()
 
     def rename(self, title: str) -> None:
         self.title = title.strip()
@@ -72,6 +96,9 @@ class SessionStore:
             created_at=data.get("created_at", datetime.now().isoformat()),
             updated_at=data.get("updated_at", datetime.now().isoformat()),
             title=data.get("title", ""),
+            memory_summary=data.get("memory_summary", ""),
+            memory_summary_message_count=int(data.get("memory_summary_message_count", 0) or 0),
+            memory_updated_at=data.get("memory_updated_at", ""),
         )
 
     def save(self, session: Session) -> None:
@@ -83,6 +110,9 @@ class SessionStore:
             "created_at": session.created_at,
             "updated_at": session.updated_at,
             "title": session.title,
+            "memory_summary": session.memory_summary,
+            "memory_summary_message_count": session.memory_summary_message_count,
+            "memory_updated_at": session.memory_updated_at,
         }
         temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         temp.replace(path)
@@ -98,6 +128,9 @@ class SessionStore:
                     created_at=data.get("created_at", datetime.now().isoformat()),
                     updated_at=data.get("updated_at", datetime.now().isoformat()),
                     title=data.get("title", ""),
+                    memory_summary=data.get("memory_summary", ""),
+                    memory_summary_message_count=int(data.get("memory_summary_message_count", 0) or 0),
+                    memory_updated_at=data.get("memory_updated_at", ""),
                 )
             except Exception:
                 continue

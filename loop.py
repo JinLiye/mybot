@@ -10,7 +10,7 @@ from mybot.context import ContextBuilder
 from mybot.events import InboundMessage, OutboundMessage
 from mybot.providers.openai_compat import OpenAICompatProvider
 from mybot.runner import AgentRunner
-from mybot.session import SessionStore
+from mybot.session import Session, SessionStore
 from mybot.tools.filesystem import confirm_outside_workspace, register_filesystem_tools
 from mybot.tools.registry import ToolRegistry
 from mybot.tools.shell import confirm_shell_exec, register_shell_tools
@@ -64,10 +64,71 @@ class AgentLoop:
             return False
         return confirm_shell_exec(command, cwd)
 
+    async def refresh_memory_summary(self, session: Session, *, force: bool = False) -> bool:
+        cutoff = self._memory_summary_cutoff(session, force=force)
+        if cutoff <= 0 or cutoff <= session.memory_summary_message_count:
+            return False
+        new_messages = session.messages[session.memory_summary_message_count : cutoff]
+        if not new_messages:
+            return False
+        prompt = self._build_memory_prompt(session.memory_summary, new_messages)
+        response = await self.provider.chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You maintain durable memory for a personal assistant. "
+                        "Summarize only stable facts, decisions, preferences, goals, and useful context. "
+                        "Do not include transient chatter unless it matters later."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            tools=None,
+            max_tokens=self.config.memory_summary_max_tokens,
+            temperature=0.1,
+        )
+        summary = (response.content or "").strip()
+        if not summary:
+            return False
+        session.set_memory_summary(summary, cutoff)
+        return True
+
+    def _memory_summary_cutoff(self, session: Session, *, force: bool) -> int:
+        keep = max(0, self.config.memory_summary_keep_messages)
+        total = len(session.messages)
+        if total <= keep:
+            return 0
+        if not force and total < self.config.memory_summary_trigger_messages:
+            return 0
+        return max(0, total - keep)
+
+    def _build_memory_prompt(self, existing_summary: str, messages: list[dict]) -> str:
+        sections = [
+            "Update the assistant memory summary using the existing summary and the new transcript.",
+            "Return a concise bullet list or short paragraphs. Keep it factual and reusable.",
+            "",
+            "[Existing Summary]",
+            existing_summary.strip() or "(none)",
+            "[/Existing Summary]",
+            "",
+            "[New Transcript]",
+        ]
+        for message in messages:
+            role = str(message.get("role") or "unknown")
+            content = str(message.get("content") or "").strip()
+            if not content:
+                continue
+            if len(content) > 2000:
+                content = content[:1999].rstrip() + "..."
+            sections.append(f"{role}: {content}")
+        sections.append("[/New Transcript]")
+        return "\n".join(sections)
+
     async def process(self, inbound: InboundMessage) -> OutboundMessage:
         session = self.sessions.get_or_create(inbound.session_key)
-        history = session.get_history(self.config.max_history_messages)
-        initial_messages = self.context.build_messages(history, inbound)
+        history = session.get_context_history(self.config.max_history_messages)
+        initial_messages = self.context.build_messages(history, inbound, session.memory_summary)
         result = await self.runner.run(
             initial_messages,
             tools=self.tools,
@@ -94,6 +155,12 @@ class AgentLoop:
             tool_events=tool_events,
             trace=result.trace,
         )
+        memory_refreshed = False
+        memory_error: str | None = None
+        try:
+            memory_refreshed = await self.refresh_memory_summary(session)
+        except Exception as exc:
+            memory_error = str(exc)
         self.sessions.save(session)
         return OutboundMessage(
             channel=inbound.channel,
@@ -103,6 +170,9 @@ class AgentLoop:
                 "tools_used": result.tools_used,
                 "tool_events": tool_events,
                 "trace": result.trace,
+                "memory_refreshed": memory_refreshed,
+                "memory_summary_message_count": session.memory_summary_message_count,
+                "memory_error": memory_error,
             },
         )
 

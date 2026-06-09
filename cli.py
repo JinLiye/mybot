@@ -217,6 +217,18 @@ def _render_tools(loop: AgentLoop) -> None:
         print(f"  {summary['description']}{required_text}")
 
 
+def _render_memory(loop: AgentLoop, chat_id: str) -> None:
+    session = loop.sessions.get_or_create(f"cli:{chat_id}")
+    if not session.memory_summary:
+        _render_status("No memory summary for current session.")
+        print(f"  messages={len(session.messages)} summarized=0")
+        return
+    _render_status(
+        f"memory summary messages={len(session.messages)} summarized={session.memory_summary_message_count} updated={session.memory_updated_at or 'unknown'}"
+    )
+    print(session.memory_summary)
+
+
 def _render_permissions(loop: AgentLoop) -> None:
     _render_status(f"tool permission mode: {loop.tool_permission_mode}")
     print("  strict  Reject shell execution and filesystem paths outside workspace")
@@ -235,6 +247,9 @@ def _print_help() -> None:
     print("  /trace             Show latest Agent Trace for current session")
     print("  /trace full        Show latest trace with full tool results")
     print("  /trace json        Print latest trace as JSON")
+    print("  /memory           Show current session memory summary")
+    print("  /memory refresh   Rebuild memory summary for old messages")
+    print("  /memory clear     Clear current session memory summary")
     print("  /rename <name>     Rename current session")
     print("  /new               Start a new session")
     print("  /session           Show current session id")
@@ -294,6 +309,30 @@ async def _chat(provider_name: str | None = None) -> None:
                 _render_error(str(exc))
             else:
                 _render_status(f"tool permission mode set to: {loop.tool_permission_mode}")
+            continue
+        if command == "/memory":
+            _render_memory(loop, state.chat_id)
+            continue
+        if command == "/memory refresh":
+            session = loop.sessions.get_or_create(f"cli:{state.chat_id}")
+            try:
+                refreshed = await loop.refresh_memory_summary(session, force=True)
+            except Exception as exc:
+                _render_error(f"memory refresh failed: {exc}")
+                continue
+            loop.sessions.save(session)
+            if refreshed:
+                _render_status(
+                    f"memory refreshed; summarized={session.memory_summary_message_count}/{len(session.messages)} messages"
+                )
+            else:
+                _render_status("No messages available for memory refresh yet.")
+            continue
+        if command == "/memory clear":
+            session = loop.sessions.get_or_create(f"cli:{state.chat_id}")
+            session.clear_memory_summary()
+            loop.sessions.save(session)
+            _render_status("memory summary cleared")
             continue
         if command == "/trace" or command in {"/trace full", "/trace json"}:
             session = loop.sessions.get_or_create(f"cli:{state.chat_id}")

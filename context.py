@@ -18,14 +18,25 @@ class ContextBuilder:
         self,
         history: list[dict[str, Any]],
         inbound: InboundMessage,
+        memory_summary: str = "",
     ) -> list[dict[str, Any]]:
         runtime_note = self._runtime_note(inbound)
         user_content = f"{inbound.content}\n\n{runtime_note}"
-        return [
-            {"role": "system", "content": self.system_prompt},
-            *history,
-            {"role": "user", "content": user_content},
-        ]
+        messages = [{"role": "system", "content": self.system_prompt}]
+        if memory_summary.strip():
+            messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "[Memory Summary]\n"
+                        f"{memory_summary.strip()}\n"
+                        "[/Memory Summary]"
+                    ),
+                }
+            )
+        messages.extend(history)
+        messages.append({"role": "user", "content": user_content})
+        return messages
 
     @staticmethod
     def _runtime_note(inbound: InboundMessage) -> str:

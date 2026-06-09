@@ -144,3 +144,42 @@ export MYBOT_BAILIAN_MODEL=qwen-plus-latest
 - `tests/`
 
 如果你要把它当成一个单独项目维护，可以直接在这个目录里初始化 git，然后推到 GitHub。
+
+
+## CLI 常用命令
+
+```text
+/help              查看命令菜单
+/resume            恢复历史会话
+/rename <name>     重命名当前会话
+/tools             查看工具状态
+/permissions       查看工具权限模式
+/trace             查看最近一次 Agent Trace
+/trace full        查看完整工具结果
+/trace json        输出 JSON Trace
+/memory            查看当前会话 memory summary
+/memory refresh    手动刷新 memory summary
+/memory clear      清空 memory summary
+```
+
+## Memory Summary
+
+`mybot` 会在会话变长后自动压缩旧消息。原始历史仍保存在 session JSON 中，模型上下文使用：
+
+```text
+system prompt + memory summary + 未压缩的最近消息 + 当前用户输入
+```
+
+相关配置：
+
+```env
+MYBOT_MEMORY_SUMMARY_TRIGGER_MESSAGES=24
+MYBOT_MEMORY_SUMMARY_KEEP_MESSAGES=12
+MYBOT_MEMORY_SUMMARY_MAX_TOKENS=512
+```
+
+默认数据目录取决于启动位置。如果从 `/home/asus/nanobot` 启动，session、trace、memory summary 会保存在：
+
+```text
+/home/asus/nanobot/.data/sessions/*.json
+```

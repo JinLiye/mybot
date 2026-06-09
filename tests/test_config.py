@@ -16,3 +16,16 @@ def test_from_env_supports_bailian(monkeypatch) -> None:
 
     assert config.provider.name == "bailian"
     assert config.provider.api_key == "test-key"
+
+
+
+def test_from_env_supports_memory_summary_config(monkeypatch) -> None:
+    monkeypatch.setenv("MYBOT_MEMORY_SUMMARY_TRIGGER_MESSAGES", "8")
+    monkeypatch.setenv("MYBOT_MEMORY_SUMMARY_KEEP_MESSAGES", "4")
+    monkeypatch.setenv("MYBOT_MEMORY_SUMMARY_MAX_TOKENS", "256")
+
+    config = BotConfig.from_env()
+
+    assert config.memory_summary_trigger_messages == 8
+    assert config.memory_summary_keep_messages == 4
+    assert config.memory_summary_max_tokens == 256
