@@ -12,7 +12,9 @@ from mybot.providers.openai_compat import OpenAICompatProvider
 from mybot.runner import AgentRunner
 from mybot.session import Session, SessionStore
 from mybot.tools.filesystem import confirm_outside_workspace, register_filesystem_tools
+from mybot.tools.patch import register_patch_tools
 from mybot.tools.registry import ToolRegistry
+from mybot.tools.search import register_search_tools
 from mybot.tools.shell import confirm_shell_exec, register_shell_tools
 
 
@@ -35,6 +37,8 @@ class AgentLoop:
         self.tool_permission_mode = "ask"
         self.tools = ToolRegistry()
         register_filesystem_tools(self.tools, config.workspace, confirm_outside=self._confirm_outside_workspace)
+        register_search_tools(self.tools, config.workspace, confirm_outside=self._confirm_outside_workspace)
+        register_patch_tools(self.tools, config.workspace, confirm_outside=self._confirm_outside_workspace)
         register_shell_tools(
             self.tools,
             config.workspace,

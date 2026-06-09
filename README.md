@@ -183,3 +183,24 @@ MYBOT_MEMORY_SUMMARY_MAX_TOKENS=512
 ```text
 /home/asus/nanobot/.data/sessions/*.json
 ```
+
+
+## 当前工具能力
+
+`mybot` 当前内置工具：
+
+```text
+list_dir       列目录
+read_file      读取 UTF-8 文本文件
+search_text    简单文本搜索
+find_files     按 query/glob/type 查找文件
+grep           结构化文本/正则搜索
+apply_patch    结构化多文件编辑，支持 dry-run
+shell_exec     一次性 shell 命令执行
+```
+
+写代码时建议优先使用：
+
+```text
+find_files -> read_file/grep -> apply_patch -> shell_exec 跑测试
+```
