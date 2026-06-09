@@ -127,3 +127,33 @@ async def test_runner_records_agent_trace() -> None:
     assert tool_result["name"] == "echo"
     assert "hello" in tool_result["result_preview"]
     assert json.loads(tool_result["result"]) == {"echo": "hello"}
+
+
+
+@pytest.mark.asyncio
+async def test_runner_returns_error_result_when_max_iterations_exceeded() -> None:
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="",
+                tool_calls=[ToolCallRequest(id="1", name="echo", arguments={"text": "one"})],
+                finish_reason="tool_calls",
+            ),
+        ]
+    )
+    tools = ToolRegistry()
+    tools.register(EchoTool())
+    runner = AgentRunner(provider)
+
+    result = await runner.run(
+        [{"role": "system", "content": "test"}, {"role": "user", "content": "hi"}],
+        tools=tools,
+        max_iterations=1,
+        max_tokens=256,
+        temperature=0.1,
+    )
+
+    assert "max_iterations=1" in result.final_content
+    assert result.trace["status"] == "error"
+    assert result.trace["steps"][-1]["type"] == "error"
+    assert result.tools_used == ["echo"]

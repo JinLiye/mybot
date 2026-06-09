@@ -212,6 +212,11 @@ class AgentRunner:
                 trace=trace,
             )
 
+        final_content = (
+            f"[Agent stopped after reaching max_iterations={max_iterations}. "
+            "The task may be partially complete. Use /trace to inspect the tool chain, "
+            "or retry with MYBOT_MAX_ITERATIONS set higher.]"
+        )
         trace["status"] = "error"
         trace["ended_at"] = _now_iso()
         trace["duration_ms"] = int((time.perf_counter() - run_started) * 1000)
@@ -222,4 +227,11 @@ class AgentRunner:
                 "message": "Agent runner exceeded max iterations",
             }
         )
-        raise RuntimeError("Agent runner exceeded max iterations")
+        conversation.append({"role": "assistant", "content": final_content})
+        return AgentRunResult(
+            final_content=final_content,
+            messages=conversation,
+            tools_used=tools_used,
+            tool_events=tool_events,
+            trace=trace,
+        )
