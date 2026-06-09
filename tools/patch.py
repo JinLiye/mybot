@@ -76,7 +76,9 @@ class ApplyPatchTool(WorkspaceTool, Tool):
     def description(self) -> str:
         return (
             "Apply structured code edits. Supports multiple add/replace edits, dry-run previews, "
-            "and workspace-relative paths. Prefer this over shell redirection or sed for code changes."
+            "and workspace-relative paths. Prefer this over shell redirection or sed for code changes. "
+            "For large files, create or update them in smaller chunks with multiple add/replace edits "
+            "instead of sending one huge new_text value."
         )
 
     @property
@@ -86,14 +88,14 @@ class ApplyPatchTool(WorkspaceTool, Tool):
             "properties": {
                 "edits": {
                     "type": "array",
-                    "description": "List of edits to apply.",
+                    "description": "List of edits to apply. For large files, split content into smaller add/replace chunks.",
                     "items": {
                         "type": "object",
                         "properties": {
                             "path": {"type": "string", "description": "Workspace-relative file path."},
                             "action": {"type": "string", "enum": ["add", "replace"]},
                             "old_text": {"type": "string", "description": "Exact text to replace."},
-                            "new_text": {"type": "string", "description": "Text to add or replace with."},
+                            "new_text": {"type": "string", "description": "Text to add or replace with. Keep individual values reasonably small to avoid truncated tool JSON."},
                         },
                         "required": ["path", "action"],
                     },

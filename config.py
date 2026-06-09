@@ -47,7 +47,7 @@ class BotConfig:
     system_prompt: str
     max_history_messages: int = 20
     max_iterations: int = 8
-    max_tokens: int = 2048
+    max_tokens: int = 4096
     temperature: float = 0.2
     memory_summary_trigger_messages: int = 24
     memory_summary_keep_messages: int = 12
@@ -89,7 +89,7 @@ class BotConfig:
         ) or ""
         max_history_messages = int(_env("MYBOT_MAX_HISTORY_MESSAGES", "20") or "20")
         max_iterations = int(_env("MYBOT_MAX_ITERATIONS", "8") or "8")
-        max_tokens = int(_env("MYBOT_MAX_TOKENS", "2048") or "2048")
+        max_tokens = int(_env("MYBOT_MAX_TOKENS", "4096") or "4096")
         temperature = float(_env("MYBOT_TEMPERATURE", "0.2") or "0.2")
         memory_summary_trigger_messages = int(_env("MYBOT_MEMORY_SUMMARY_TRIGGER_MESSAGES", "24") or "24")
         memory_summary_keep_messages = int(_env("MYBOT_MEMORY_SUMMARY_KEEP_MESSAGES", "12") or "12")
