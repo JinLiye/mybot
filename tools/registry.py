@@ -33,6 +33,11 @@ class ToolRegistry:
         tool = self._tools.get(name)
         if tool is None:
             return f"Error: unknown tool '{name}'"
+        if arguments.get("_invalid_tool_arguments"):
+            return (
+                f"Error: invalid arguments for tool '{name}': {arguments.get('error', 'unknown parse error')}. "
+                "The model should retry the tool call with valid JSON arguments."
+            )
         result = await tool.execute(**arguments)
         if isinstance(result, str):
             return result
